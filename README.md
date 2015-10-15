@@ -1,12 +1,13 @@
 [DevNet](https://github.com/PacificBiosciences/cDNA_primer/wiki) | <a href="mailto:devnet@pacificbiosciences.com">Contact Us</a> | [Terms of Use](http://pacbiodevnet.com/Terms_of_Use.html) | [Trademarks](http://pacb.com/terms-of-use/index.html#trademarks)
 
-Last Updated: 09/21/2015
+Last Updated: 10/15/2015
 
+**IMPORTANT NOTICE: The current version (2.2.3) of ToFU will NOT BE UPDATED. The next round of ToFu will be expected to be released after November 2015, after changes conforming to [PacBio's new BAM format standard](https://www.genomeweb.com/informatics/pacbio-unveils-plans-use-bam-format-sequence-data-user-community-weighs) have been completed. All bugs and issues in ToFU 2.2.3 can be reported but will not be fixed until after the format changes.**
 
 
 ## Latest News
 
-Current ToFU version: v2.2.2 (see [CHANGES](https://github.com/PacificBiosciences/cDNA_primer/wiki/cDNA_primer-tofu-CHANGELOG))
+Current ToFU version: v2.2.3 (see [CHANGES](https://github.com/PacificBiosciences/cDNA_primer/wiki/cDNA_primer-tofu-CHANGELOG))
 
 The scripts in this repository are now compatible with SMRTAnalysis 2.3. It is a "beta" version of the RS_IsoSeq protocol that is supported in 2.3, meaning that it extends the existing RS_IsoSeq code base, and is an unofficial, developemental version of RS_IsoSeq. This beta version is only accessible via command line. The command line name of the official RS_IsoSeq is *pbtranscript*, to differentiate from the official version, in the tutorials we will refer to the beta version provided on this site as *pbtranscript-tofu*. 
 
