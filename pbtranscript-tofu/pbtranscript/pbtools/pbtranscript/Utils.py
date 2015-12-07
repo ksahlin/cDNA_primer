@@ -30,7 +30,7 @@ def revcmp(seq):
     NTMAP = {'a': 't', 'c': 'g', 't': 'a', 'g': 'c',
              'A': 'T', 'C': 'G', 'T': 'A', 'G': 'C',
              '*': '*', 'n': 'n', 'N': 'N'}
-    return "".join([NTMAP[x] for x in seq])[::-1]
+    return "".join([NTMAP[x] for x in seq.rstrip()])[::-1]
 
 
 def realpath(f):
