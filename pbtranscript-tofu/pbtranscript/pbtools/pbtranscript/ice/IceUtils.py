@@ -895,12 +895,12 @@ def ice_fa2fq(in_fa, ccs_fofn, out_fq):
     """
 
     qver = basQVcacher()
-    if ccs_fofn.endswith(".h5"):  # Input is a ccs.h5 file not a FOFN.
-        qver.add_bash5(ccs_fofn)
-    else:  # Input is a ccs FOFN containing multiple ccs.h5 files.
-        for ccs_fn in get_files_from_fofn(ccs_fofn):
-            qver.add_bash5(ccs_fn)
-
+    if ccs_fofn:
+        if ccs_fofn.endswith(".h5"):  # Input is a ccs.h5 file not a FOFN.
+            qver.add_bash5(ccs_fofn)
+        else:  # Input is a ccs FOFN containing multiple ccs.h5 files.
+            for ccs_fn in get_files_from_fofn(ccs_fofn):
+                qver.add_bash5(ccs_fn)
     bas_handlers = {}
 
     with FastaReader(in_fa) as reader, \
@@ -914,17 +914,20 @@ def ice_fa2fq(in_fa, ccs_fofn, out_fq):
             except ValueError:
                 raise ValueError("{seqid} is not a valid CCS read".
                                  format(seqid=seqid))
-            try:
-                bas_file = qver.bas_files[movie][seqid]
-                if bas_file not in bas_handlers:
-                    bas_handlers[bas_file] = BasH5Reader(bas_file)
-            except KeyError:
-                raise IOError("Could not read {s} from input ccs fofn.".
+            if ccs_fofn:
+                try:
+                    bas_file = qver.bas_files[movie][seqid]
+                    if bas_file not in bas_handlers:
+                        bas_handlers[bas_file] = BasH5Reader(bas_file)
+                except KeyError:
+                    raise IOError("Could not read {s} from input ccs fofn.".
                               format(s=seqid))
-            logging.debug("Getting QVs for {name} ...".format(name=r.name))
-            qvs = get_qv_from_bas_handler(bas_handler=bas_handlers[bas_file],
+                logging.debug("Getting QVs for {name} ...".format(name=r.name))
+                qvs = get_qv_from_bas_handler(bas_handler=bas_handlers[bas_file],
                                           hn=hn, s_e=s_e,
                                           qv_name="QualityValue")
+            else: #No quality values provided to pbtranscript.py cluster
+                qvs = [60]*len(r.sequence) # No information given, have strong belief in the base calls
             if len(r.sequence) != len(qvs):
                 raise ValueError("Sequence and QVs of {r} should be the same!".
                                  format(r=r.name))

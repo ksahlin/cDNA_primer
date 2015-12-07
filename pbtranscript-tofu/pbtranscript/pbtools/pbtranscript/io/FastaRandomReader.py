@@ -50,7 +50,7 @@ class FastaRandomReader:
                 break
             content += line.strip()
         # return SeqRecord(Seq(content), id=k)
-        return FastaRecord(name=k, sequence=content)
+        return FastaRecord(k, sequence=content)
 
     def __len__(self):
         return len(self.d)
@@ -148,7 +148,7 @@ class SubreadFastaReader(object):
                 if line.startswith('>'):
                     break
                 content += line.strip()
-            output.append(FastaRecord(name=seqid, sequence=content))
+            output.append(FastaRecord(seqid, sequence=content))
         return output
 
     def keys(self):
