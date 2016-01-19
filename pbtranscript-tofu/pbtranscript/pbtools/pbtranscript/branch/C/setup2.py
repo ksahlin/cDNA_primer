@@ -1,9 +1,11 @@
 from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Distutils import build_ext
+import numpy
 
 ext_modules = [#Extension("BioReaders", ["BioReaders.pyx"]), \
-        Extension("c_branch", ["c_branch.pyx"]),\
+        Extension("c_branch", ["c_branch.pyx"],
+            include_dirs=[numpy.get_include()]),\
         Extension("modified_bx_intervals.intersection_unique", ["modified_bx_intervals/intersection_unique.pyx"])]
 
 setup(
