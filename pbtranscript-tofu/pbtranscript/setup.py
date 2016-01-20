@@ -1,17 +1,16 @@
-from setuptools import setup, find_packages
-from distutils.extension import Extension
+from setuptools import setup, Extension, find_packages
 import sys
-import numpy as np
-
+import numpy
 
 __author__ = "jdrake|etseng|yli@pacificbiosciences.com"
 version = "2.2.3"
 
-if 'setuptools.extension' in sys.modules:
-    m = sys.modules['setuptools.extension']
-    m.Extension.__dict__ = m._Extension.__dict__
+#if 'setuptools.extension' in sys.modules:
+#    m = sys.modules['setuptools.extension']
+#    m.Extension.__dict__ = m._Extension.__dict__
 
-ext_modules = [Extension("pbtools.pbtranscript.findECE",
+ext_modules = [
+                Extension("pbtools.pbtranscript.findECE",
                          ["pbtools/pbtranscript/ice/C/findECE.c"]),
                 Extension("pbtools.pbtranscript.io.c_basQV",
                          ["pbtools/pbtranscript/ice/C/c_basQV.cpp"], language="c++"),
@@ -20,24 +19,23 @@ ext_modules = [Extension("pbtools.pbtranscript.findECE",
 #                Extension("pbtools.pbtranscript.c_Prob", 
 #                         ["pbtools/pbtranscript/ice/C/ProbHandler.cpp"], language="c++"),
                 Extension("pbtools.pbtranscript.ice.ProbModel",
-                    ["pbtools/pbtranscript/ice/C/ProbModel.cpp"], language="c++"),
+                         ["pbtools/pbtranscript/ice/C/ProbModel.cpp"], language="c++"),
                 Extension("pbtools.pbtranscript.BioReaders",
                          ["pbtools/pbtranscript/io/C/BioReaders.c"]),
                 Extension("pbtools.pbtranscript.modified_bx_intervals.intersection_unique",
-                    ["pbtools/pbtranscript/branch/C/modified_bx_intervals/intersection_unique.c"]),
+                         ["pbtools/pbtranscript/branch/C/modified_bx_intervals/intersection_unique.c"]),
                 Extension("pbtools.pbtranscript.c_branch", 
                          ["pbtools/pbtranscript/branch/C/c_branch.c"]), 
-              ]
-
+]
 setup(
-#    setup_requires=['setuptools_cython'],
+    setup_requires=['setuptools_cython'],
     name = 'pbtools.pbtranscript',
     version=version,
     author='Pacific Biosciences',
     author_email='devnet@pacificbiosciences.com',
     license='LICENSE.txt',
     ext_modules = ext_modules,
-    include_dirs = [np.get_include()],
+    include_dirs = [numpy.get_include()],
     scripts=['pbtools/pbtranscript/pbtranscript.py',
              'pbtools/pbtranscript/collapse_isoforms_by_sam.py',
              'pbtools/pbtranscript/fusion_finder.py',
@@ -47,12 +45,10 @@ setup(
              'pbtools/pbtranscript/ice_pbdagcon.py',
              'pbtools/pbtranscript/ice_quiver.py',
              'pbtools/pbtranscript/ice_fa2fq.py',
-            'pbtools/pbtranscript/picking_up_ice.py',
-            'pbtools/pbtranscript/cleanup_ice.py',
-            'pbtools/pbtranscript/counting/chain_samples.py'
+             'pbtools/pbtranscript/picking_up_ice.py',
+             'pbtools/pbtranscript/cleanup_ice.py',
+             'pbtools/pbtranscript/counting/chain_samples.py'
         ],
-
-
     entry_points={'console_scripts': [
         'fasta_splitter.py = pbtools.pbtranscript.io.FastaSplitter:main',
         'filter_sam.py = pbtools.pbtranscript.io.filter_sam:main',
@@ -70,11 +66,12 @@ setup(
                    'data/gcon_in.fa',
                    'data/gcon_out.fa']},
     packages=find_packages(),
-    zip_safe=False,
     install_requires=[
-        'pbcore >= 0.6.3',
-        'bx-python'
-        ]
+#        'pbcore >= 0.6.3',
+#        'bx-python',
+#        'setuptools_cython',
+        ],
+    zip_safe=False,
     )
 
 #'pbtools/pbtranscript/io/FastaSplitter.py',
