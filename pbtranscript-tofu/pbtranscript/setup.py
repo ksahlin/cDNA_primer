@@ -67,8 +67,8 @@ setup(
                    'data/gcon_out.fa']},
     packages=find_packages(),
     install_requires=[
-#        'pbcore >= 0.6.3',
-#        'bx-python',
+        'pbcore >= 0.6.3',
+        'bx-python',
 #        'setuptools_cython',
         ],
     zip_safe=False,
