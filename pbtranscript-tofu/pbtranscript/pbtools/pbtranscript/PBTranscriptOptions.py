@@ -419,6 +419,7 @@ def add_cluster_summary_report_arguments(parser):
 
 def add_cluster_arguments(parser, show_sge_env_name=False, show_sge_queue=False):
     """Add arguments for subcommand `cluster`."""
+
     parser = add_flnc_fa_argument(parser, positional=True)
 
     helpstr = "Output predicted (unpolished) consensus isoforms in fasta file."

@@ -9,6 +9,7 @@ from pbcore.util.Process import backticks
 from pbcore.io.FastaIO import FastaReader
 from pbcore.io.FastqIO import FastqReader
 
+
 def check_ids_unique(fa_or_fq_filename, is_fq=False):
     """
     Confirm that a FASTA/FASTQ file has all unique IDs

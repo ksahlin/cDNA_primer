@@ -173,9 +173,11 @@ class DalignerRunner:
                 # old DALIGNER param is not sensitive enough for > 5 kb CCS reads
                 # but the more sensitive param seems to do badly on 1 - 2 kb reads. WTH =_=
                 if not sensitive_mode:
-                    cmd = "timeout 600 daligner -h35 -k16 -e.80 -l{m} -s100 -t10 {q}.{i} {db}.{j}"
+                    cmd = "timeout 600 daligner -w12 -h24 -k24 -e.80 -l{m} -s100 -t10 {q}.{i} {db}.{j}"
+                    #cmd = "timeout 600 daligner -h35 -k16 -e.80 -l{m} -s100 -t10 {q}.{i} {db}.{j}"
                 else:
-                    cmd = "timeout 600 daligner -w12 -h24 -k24 -e.70 -l{m} -s100 -t10 {q}.{i} {db}.{j}"
+                    cmd = "timeout 1200 daligner -w12 -h16 -k12 -e.70 -l{m} -s100 -t10 {q}.{i} {db}.{j}"
+                    #cmd = "timeout 600 daligner -w12 -h24 -k24 -e.70 -l{m} -s100 -t10 {q}.{i} {db}.{j}"
 
                 cmd = cmd.format(q=self.query_dazz_handler.dazz_filename, i=i+1, \
                     db=self.db_dazz_handler.dazz_filename, j=j+1, \

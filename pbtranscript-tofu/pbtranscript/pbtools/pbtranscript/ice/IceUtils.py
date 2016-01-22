@@ -11,7 +11,7 @@ from multiprocessing import Process, Manager
 from cPickle import dump, load
 from collections import defaultdict
 from pbcore.util.Process import backticks
-from pbcore.io import FastaReader, FastaWriter, FastqWriter, \
+from pbcore.io import FastaReader, FastaWriter, FastqReader, FastqWriter, \
         BasH5Reader
 from pbtools.pbtranscript.Utils import realpath, mkdir, \
         get_files_from_fofn, write_files_to_fofn, real_upath
@@ -122,26 +122,62 @@ def sanity_check_sge(sge_opts, scriptDir, testDirName="gcon_test_dir"):
 
 
 
-def set_daligner_sensitivity_setting(fasta_filename):
-    lens = np.array([len(r.sequence) for r in FastaReader(fasta_filename)])
-    _low, _high = np.percentile(lens, [10, 90])
+def set_daligner_sensitivity_setting(fastq_filename, is_fasta=False):
+    """
+    based on the input length range, this sets
+     -- sensitivity for DALIGNER  (only two modes: sensitive & NOT sensitive)
+     -- how much to ignore in the first 5' end in missed alignment (can override from command line)
+    """
+    if is_fasta:
+        lens = np.array([len(r.sequence) for r in FastaReader(fastq_filename)])
+    else:
+        lens = np.array([len(r.sequence) for r in FastqReader(fastq_filename)])
+    _low, _high = np.percentile(lens, [1, 95])
     _low  = int(_low)
     _high = int(_high)
-    if _low >= 6000:
-        with open(fasta_filename+'.sensitive.config', 'w') as f:
+    if _low >= 10000:  # for 10kb+
+        with open(fastq_filename+'.sensitive.config', 'w') as f:
             f.write("sensitive=True\n")
             f.write("low={0}\nhigh={1}\n".format(_low, _high))
-        return True, _low, _high
-    else:
-        with open(fasta_filename+'.sensitive.config', 'w') as f:
+            f.write("ignore5=500\nignore3=50\n")
+            f.write("ece_min_len=60")
+        return True, _low, _high, 500, 50, 60
+    elif _low >= 6000:  # for 6-10kb
+        with open(fastq_filename+'.sensitive.config', 'w') as f:
+            f.write("sensitive=True\n")
+            f.write("low={0}\nhigh={1}\n".format(_low, _high))
+            f.write("ignore5=200\nignore3=50\n")
+            f.write("ece_min_len=40")
+        return True, _low, _high, 200, 50, 40
+    elif _low >= 3000:  # for 3-6kb
+        with open(fastq_filename+'.sensitive.config', 'w') as f:
             f.write("sensitive=False\n")
             f.write("low={0}\nhigh={1}\n".format(_low, _high))
-        return False, _low, _high
+            f.write("ignore5=100\nignore3=50\n")
+            f.write("ece_min_len=20")
+        return True, _low, _high, 100, 50, 20
+    else:# for 0-3 kb
+        with open(fastq_filename+'.sensitive.config', 'w') as f:
+            f.write("sensitive=False\n")
+            f.write("low={0}\nhigh={1}\n".format(_low, _high))
+            f.write("ignore5=50\nignore3=50\n")
+            f.write("ece_min_len=20")
+        return False, _low, _high, 50, 50, 20
 
-def get_daligner_sensitivity_setting(fasta_filename):
-    config = fasta_filename + '.sensitive.config'
+def get_daligner_sensitivity_setting(fastq_filename, is_fasta=False):
+    """
+    config file example (each line must be in order):
+
+    sensitive=False
+    low=526
+    high=2046
+    ignore5=50
+    ignore3=50
+    ece_min_len=20
+    """
+    config = fastq_filename + '.sensitive.config'
     if not os.path.exists(config):
-        return set_daligner_sensitivity_setting(fasta_filename)
+        return set_daligner_sensitivity_setting(fastq_filename, is_fasta)
     else:
         with open(config) as f:
             a, b = f.readline().strip().split('=')
@@ -153,7 +189,16 @@ def get_daligner_sensitivity_setting(fasta_filename):
             a, b = f.readline().strip().split('=')
             assert a == 'high'
             _high = int(b)
-        return flag, _low, _high
+            a, b = f.readline().strip().split('=')
+            assert a == 'ignore5'
+            _ignore5 = int(b)
+            a, b = f.readline().strip().split('=')
+            assert a == 'ignore3'
+            _ignore3 = int(b)
+            a, b = f.readline().strip().split('=')
+            assert a == 'ece_min_len'
+            _ece_min_len = int(b)
+        return flag, _low, _high, _ignore5, _ignore3, _ece_min_len
 
 
 def get_ece_arr_from_alignment(record):
@@ -361,7 +406,7 @@ class HitItem(object):
 
 def blasr_against_ref(output_filename, is_FL, sID_starts_with_c,
                       qver_get_func, qvmean_get_func, qv_prob_threshold=.03,
-                      ece_penalty=1, ece_min_len=20, same_strand_only=True, max_missed_start=200, max_missed_end=50):
+                      ece_penalty=1, ece_min_len=20, same_strand_only=True, max_missed_start=50, max_missed_end=50):
     """
     Excluding criteria:
     (1) self hit
@@ -401,7 +446,7 @@ def blasr_against_ref(output_filename, is_FL, sID_starts_with_c,
                 yield HitItem(qID=r.qID, cID=cID)
                 continue
 
-            # full-length case: allow up to 200bp of 5' not aligned
+            # full-length case: allow up to <max_missed_start> bp of 5' not aligned
             # and 50bp of 3' not aligned
             # non-full-length case: not really tested...don't use
             if is_FL and (r.sStart > max_missed_start or r.qStart > max_missed_start or
@@ -445,23 +490,20 @@ def alignment_has_large_nonmatch(ece_arr, penalty, min_len):
     return (len(findECE(s, len(s), min_len, True)) > 0)
 
 
-def possible_merge(r, ece_penalty, ece_min_len):
+def possible_merge(r, ece_penalty, ece_min_len, max_missed_start, max_missed_end):
     """
     r --- BLASRM5Record
     Criteria:
     (1) identity >= 90% and same strand
     (2) check criteria for how much is allowed to differ on the
         5' / 3' ends
-
-    NOTE: 200 bp on 5' and 50 bp on 3' leniency is now HARD-CODED!
-    Should change later
     """
     if r.sID == r.qID or r.identity < 90 or r.strand == '-':
         return False
     # intentional here to prevent disrupting future ICE runs
     # MORE lenient on 5' but NOT on 3'
-    if ((r.qLength - r.qEnd) > 50 or (r.sLength - r.sEnd) > 50 or
-            r.qStart > 200 or r.sStart > 200):
+    if ((r.qLength - r.qEnd) > max_missed_end or (r.sLength - r.sEnd) > max_missed_end or
+            r.qStart > max_missed_start or r.sStart > max_missed_start):
         return False
 
     arr = np.array([(x == '*') * 1 for x in r.alnStr])
@@ -888,6 +930,10 @@ def get_qv_from_bas_handler(bas_handler, hn, s_e, qv_name):
         qvs = qvs[::-1]
     return qvs
 
+def ice_fq2fa(in_fq, out_fa):
+    handle = FastaWriter(out_fa)
+    for r in FastqReader(in_fq):
+        handle.writeRecord(r.name, r.sequence)
 
 def ice_fa2fq(in_fa, ccs_fofn, out_fq):
     """Convert an input FASTA file to an output FASTQ file,

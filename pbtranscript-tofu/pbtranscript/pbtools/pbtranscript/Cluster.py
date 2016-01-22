@@ -6,14 +6,14 @@ import logging
 import cPickle
 import time
 from pbtools.pbtranscript.PBTranscriptException import PBTranscriptException
-from pbtools.pbtranscript.io.FastaSplitter import splitFasta
+from pbtools.pbtranscript.io.FastqSplitter import splitFastq
 from pbtools.pbtranscript.Utils import realpath, ln
 from pbtools.pbtranscript.Polish import Polish
 from pbtools.pbtranscript.ice.ProbModel import ProbFromModel, ProbFromQV, ProbFromFastq
 from pbtools.pbtranscript.ice.IceFiles import IceFiles
 from pbtools.pbtranscript.ice.IceInit import IceInit
 from pbtools.pbtranscript.ice.IceIterative import IceIterative
-from pbtools.pbtranscript.ice.IceUtils import ice_fa2fq
+from pbtools.pbtranscript.ice.IceUtils import ice_fa2fq, ice_fq2fa
 from pbtools.pbtranscript.__init__ import get_version
 
 
@@ -59,8 +59,8 @@ class Cluster(IceFiles):
 
         self._probqv = None     # probability & quality value
 
-        self._flnc_splitted_fas = []  # split flnc_fa into smaller files.
-        self._nflncSplittedFas = []  # split nfl_fa into smaller files.
+        self._flnc_splitted_fqs = []  # split flnc_fa into smaller files.
+        #self._nflncSplittedFqs = []  # split nfl_fa into smaller files.  # (Liz) this is not used!
         self._logConfigs()      # Log configurations
 
         self.iceinit = None
@@ -205,8 +205,8 @@ class Cluster(IceFiles):
                      n=self.ice_opts.flnc_reads_per_split),
                      level=logging.INFO)
 
-        self._flnc_splitted_fas = splitFasta(
-            input_fasta=self.flnc_fa,
+        self._flnc_splitted_fqs = splitFastq(
+            input_fastq=self.flnc_fa,
             reads_per_split=self.ice_opts.flnc_reads_per_split,
             out_dir=self.root_dir,
             out_prefix="input.split",
@@ -214,21 +214,28 @@ class Cluster(IceFiles):
 
 
         self.add_log("Splitted files are: " +
-                     "\n".join(self._flnc_splitted_fas),
+                     "\n".join(self._flnc_splitted_fqs),
                      level=logging.INFO)
 
-        firstSplit = self._flnc_splitted_fas[0]
-        firstSplit_fq = firstSplit[:firstSplit.rfind('.')] + '.fastq'
-        self.add_log("Converting first split file {0} + {1} into fastq\n".format(\
-                firstSplit, self.ccs_fofn), level=logging.INFO)
-        # Convert this into FASTQ
-        ice_fa2fq(firstSplit, self.ccs_fofn, firstSplit_fq)
+        firstSplit_fq = self._flnc_splitted_fqs[0]
+        firstSplit_fa = firstSplit_fq[:firstSplit_fq.rfind('.')] + '.fasta'
+        ice_fq2fa(firstSplit_fq, firstSplit_fa)
 
-        # Set up probabbility and quality value model
-        if self.ice_opts.use_finer_qv:
-            self._setProbQV_ccs(self.ccs_fofn, firstSplit)
-        else:
-            self._setProbQV_fq(firstSplitFq=firstSplit_fq)
+
+        # -------- commenting out below because we already have FASTQ!
+        #firstSplit = self._flnc_splitted_fas[0]
+        #firstSplit_fq = firstSplit[:firstSplit.rfind('.')] + '.fastq'
+        #self.add_log("Converting first split file {0} + {1} into fastq\n".format(\
+        #        firstSplit, self.ccs_fofn), level=logging.INFO)
+        ## Convert this into FASTQ
+        #ice_fa2fq(firstSplit, self.ccs_fofn, firstSplit_fq)
+        #
+        ## Set up probabbility and quality value model
+        #if self.ice_opts.use_finer_qv:
+        #    self._setProbQV_ccs(self.ccs_fofn, firstSplit)
+        #else:
+        #    self._setProbQV_fq(firstSplitFq=firstSplit_fq)
+        self._setProbQV_fq(firstSplitFq=firstSplit_fq)
 
         # Initialize cluster by clique
         if os.path.exists(self.initPickleFN):
@@ -238,7 +245,7 @@ class Cluster(IceFiles):
         else:
             self.add_log("Finding maximal cliques: initializing IceInit.",
                          level=logging.INFO)
-            self.iceinit = IceInit(readsFa=firstSplit,
+            self.iceinit = IceInit(readsFa=firstSplit_fa,
                                    qver_get_func=self._probqv.get_smoothed,
                                    ice_opts=self.ice_opts,
                                    sge_opts=self.sge_opts,
@@ -258,8 +265,9 @@ class Cluster(IceFiles):
 
 
         self.icec = IceIterative(
-            fasta_filename=firstSplit,
-            fasta_filenames_to_add=self._flnc_splitted_fas[1:],
+            fasta_filename=firstSplit_fa,
+            fastq_filename=firstSplit_fq,
+            fastq_filenames_to_add=self._flnc_splitted_fqs[1:],
             all_fasta_filename=self.flnc_fa,
             ccs_fofn=self.ccs_fofn,
             root_dir=self.root_dir,
@@ -267,7 +275,6 @@ class Cluster(IceFiles):
             sge_opts=self.sge_opts,
             uc=uc,
             probQV=self._probqv,
-            fastq_filename=firstSplit_fq,
             use_ccs_qv=self.ice_opts.use_finer_qv)
         self.add_log("IceIterative log: {f}.".format(f=self.icec.log_fn))
         self.icec.run()

@@ -10,7 +10,7 @@ bdist:
 	python setup.py bdist --formats=egg
 
 install:
-	python setup.py install
+	python setup.py install --prefix="/galaxy/home/ksahlin/local_python_modules"
 
 develop:
 	python setup.py develop

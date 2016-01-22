@@ -5,7 +5,8 @@
 import sys
 import os.path as op
 import logging
-from pbtools.pbtranscript.io.FastaSplitter import splitFasta
+#from pbtools.pbtranscript.io.FastaSplitter import splitFasta
+from pbtools.pbtranscript.io.FastqSplitter import splitFastq
 from pbtools.pbtranscript.__init__ import get_version
 from pbtools.pbtranscript.Utils import realpath
 from pbtools.pbtranscript.ClusterOptions import IceOptions, SgeOptions, \
@@ -143,11 +144,11 @@ class Polish(IceFiles):
                      "smaller files each containing {n} reads.".format(
                      n=self.nfl_reads_per_split),
                      level=logging.INFO)
-        self._nfl_splitted_fas = splitFasta(input_fasta=self.nfl_fa,
+        self._nfl_splitted_fqs = splitFastq(input_fastq=self.nfl_fa,
                                             reads_per_split=self.nfl_reads_per_split,
                                             out_dir=self.nfl_dir,
                                             out_prefix="input.split")
-        msg = "Splitted files are: " + "\n".join(self._nfl_splitted_fas)
+        msg = "Splitted files are: " + "\n".join(self._nfl_splitted_fqs)
         self.add_log(msg, level=logging.INFO)
 
         # Generating dazz DB for final.consensus.fasta
@@ -163,7 +164,7 @@ class Polish(IceFiles):
 
         self.icep = IceAllPartials(
             root_dir=self.root_dir,
-            fasta_filenames=self._nfl_splitted_fas,
+            fastq_filenames=self._nfl_splitted_fqs,
             ref_fasta=self.final_consensus_fa,
             out_pickle=self.nfl_all_pickle_fn,
             sge_opts=self.sge_opts,

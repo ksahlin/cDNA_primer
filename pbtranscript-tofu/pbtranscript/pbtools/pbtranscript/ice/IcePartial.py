@@ -59,11 +59,11 @@ from pbtools.pbtranscript.Utils import realpath, touch, real_upath
 from pbtools.pbtranscript.PBTranscriptOptions import add_fofn_arguments
 from pbtools.pbtranscript.ice.ProbModel import ProbFromModel, ProbFromQV, ProbFromFastq
 from pbtools.pbtranscript.ice.IceUtils import blasr_against_ref
-from pbtools.pbtranscript.ice.IceUtils import ice_fa2fq, get_daligner_sensitivity_setting
+from pbtools.pbtranscript.ice.IceUtils import ice_fa2fq, ice_fq2fa, get_daligner_sensitivity_setting
 from pbtools.pbtranscript.icedalign.IceDalignUtils import DazzIDHandler, DalignerRunner
 from pbtools.pbtranscript.icedalign.IceDalignReader import dalign_against_ref
 
-def build_uc_from_partial_daligner(input_fasta, ref_fasta, out_pickle,
+def build_uc_from_partial_daligner(input_fastq, ref_fasta, out_pickle,
                           ccs_fofn=None,
                           done_filename=None, use_finer_qv=False, cpus=24, no_qv_or_aln_checking=True):
     """
@@ -79,12 +79,14 @@ def build_uc_from_partial_daligner(input_fasta, ref_fasta, out_pickle,
     ccs_fofn --- If None, assume no quality value is available,
     otherwise, use QV from ccs_fofn.
     """
-    input_fasta = realpath(input_fasta)
+    input_fastq = realpath(input_fastq)
+    input_fasta = input_fastq[:input_fastq.rfind('.')] + '.fasta'
+    ice_fq2fa(input_fastq, input_fasta)
     ref_fasta = realpath(ref_fasta)
     out_pickle = realpath(out_pickle)
     output_dir = os.path.dirname(out_pickle)
 
-    daligner_sensitive_mode, _low, _high = get_daligner_sensitivity_setting(ref_fasta)
+    daligner_sensitive_mode, _low, _high, _ignore5, _ignore3, _ece_min_len = get_daligner_sensitivity_setting(ref_fasta, is_fasta=True)
 
     # DB should always be already converted
     ref_obj = DazzIDHandler(ref_fasta, True)
@@ -94,7 +96,7 @@ def build_uc_from_partial_daligner(input_fasta, ref_fasta, out_pickle,
     runner = DalignerRunner(input_fasta, ref_fasta, is_FL=False, same_strand_only=False, \
                             query_converted=True, db_converted=True, query_made=False, \
                             db_made=True, use_sge=False, cpus=cpus, sge_opts=None)
-    las_filenames, las_out_filenames = runner.runHPC(min_match_len=300, output_dir=output_dir, sensitive_mode=daligner_sensitive_mode)
+    las_filenames, las_out_filenames = runner.runHPC(min_match_len=_low, output_dir=output_dir, sensitive_mode=daligner_sensitive_mode)
 
     if no_qv_or_aln_checking:
         # not using QVs or alignment checking!
@@ -102,22 +104,25 @@ def build_uc_from_partial_daligner(input_fasta, ref_fasta, out_pickle,
         logging.info("Not using QV for partial_uc. Loading dummy QV.")
         probqv = ProbFromModel(.01, .07, .06)
     else:
-        if ccs_fofn is None:
-            logging.info("Loading probability from model (0.01,0.07,0.06)")
-            probqv = ProbFromModel(.01, .07, .06)
-        else:
-            start_t = time.time()
-            if use_finer_qv:
-                probqv = ProbFromQV(input_fofn=ccs_fofn, fasta_filename=input_fasta)
-                logging.info("Loading QVs from {i} + {f} took {s} secs".format(f=ccs_fofn, i=input_fasta,\
-                    s=time.time()-start_t))
-            else:
-                input_fastq = input_fasta[:input_fasta.rfind('.')] + '.fastq'
-                logging.info("Converting {i} + {f} --> {fq}".format(i=input_fasta, f=ccs_fofn, fq=input_fastq))
-                ice_fa2fq(input_fasta, ccs_fofn, input_fastq)
-                probqv = ProbFromFastq(input_fastq)
-                logging.info("Loading QVs from {fq} took {s} secs".format(fq=input_fastq, s=time.time()-start_t))
-                print >> sys.stderr, "Loading QVs from {fq} took {s} secs".format(fq=input_fastq, s=time.time()-start_t)
+#        if ccs_fofn is None:
+#            logging.info("Loading probability from model (0.01,0.07,0.06)")
+#            probqv = ProbFromModel(.01, .07, .06)
+#        else:
+        start_t = time.time()
+        probqv = ProbFromFastq(input_fastq)
+        logging.info("Loading QVs from {fq} took {s} secs".format(fq=input_fastq, s=time.time()-start_t))
+# --------- comment out below since we are just using FASTQ / BAM
+#            if use_finer_qv:
+#                probqv = ProbFromQV(input_fofn=ccs_fofn, fasta_filename=input_fasta)
+#                logging.info("Loading QVs from {i} + {f} took {s} secs".format(f=ccs_fofn, i=input_fasta,\
+#                    s=time.time()-start_t))
+#            else:
+#                input_fastq = input_fasta[:input_fasta.rfind('.')] + '.fastq'
+#                logging.info("Converting {i} + {f} --> {fq}".format(i=input_fasta, f=ccs_fofn, fq=input_fastq))
+#                ice_fa2fq(input_fasta, ccs_fofn, input_fastq)
+#                probqv = ProbFromFastq(input_fastq)
+#                logging.info("Loading QVs from {fq} took {s} secs".format(fq=input_fastq, s=time.time()-start_t))
+#                print >> sys.stderr, "Loading QVs from {fq} took {s} secs".format(fq=input_fastq, s=time.time()-start_t)
 
     logging.info("Calling dalign_against_ref ...")
 
@@ -134,9 +139,11 @@ def build_uc_from_partial_daligner(input_fasta, ref_fasta, out_pickle,
                                  qver_get_func=probqv.get_smoothed,
                                  qvmean_get_func=probqv.get_mean,
                                  ece_penalty=1,
-                                 ece_min_len=20,
+                                 ece_min_len=_ece_min_len,
                                  same_strand_only=False,
-                                 no_qv_or_aln_checking=no_qv_or_aln_checking)
+                                 no_qv_or_aln_checking=no_qv_or_aln_checking,
+                                 max_missed_start=_ignore5,
+                                 max_missed_end=_ignore3)
         for h in hitItems:
             if h.ece_arr is not None:
                 if h.cID not in partial_uc:
@@ -232,8 +239,10 @@ def build_uc_from_partial(input_fasta, ref_fasta, out_pickle,
                                  qvmean_get_func=probqv.get_mean,
                                  qver_get_func=probqv.get_smoothed,
                                  ece_penalty=1,
-                                 ece_min_len=10,
-                                 same_strand_only=False)
+                                 ece_min_len=20,
+                                 same_strand_only=False,
+                                 max_missed_start=200,
+                                 max_missed_end=50)
 
     partial_uc = {}  # Maps each isoform (cluster) id to a list of reads
     # which can map to the isoform
@@ -274,10 +283,10 @@ class IcePartialOne(object):
            "unpolished consensus isoforms."
     prog = "ice_partial.py one "
 
-    def __init__(self, input_fasta, ref_fasta, out_pickle,
+    def __init__(self, input_fastq, ref_fasta, out_pickle,
                  sa_file=None, ccs_fofn=None,
                  done_filename=None, blasr_nproc=12, use_finer_qv=False):
-        self.input_fasta = input_fasta
+        self.input_fastq = input_fastq
         self.ref_fasta = ref_fasta
         self.out_pickle = out_pickle
         self.sa_file = sa_file
@@ -288,7 +297,7 @@ class IcePartialOne(object):
 
     def cmd_str(self):
         """Return a cmd string (ice_partial.py one)."""
-        return self._cmd_str(input_fasta=self.input_fasta,
+        return self._cmd_str(input_fastq=self.input_fastq,
                              ref_fasta=self.ref_fasta,
                              out_pickle=self.out_pickle,
                              sa_file=self.sa_file,
@@ -296,12 +305,12 @@ class IcePartialOne(object):
                              done_filename=self.done_filename,
                              blasr_nproc=self.blasr_nproc)
 
-    def _cmd_str(self, input_fasta, ref_fasta, out_pickle,
+    def _cmd_str(self, input_fastq, ref_fasta, out_pickle,
                  sa_file=None, ccs_fofn=None,
                  done_filename=None, blasr_nproc=12):
         """Return a cmd string (ice_partil.py one)"""
         cmd = self.prog + \
-              "{f} ".format(f=input_fasta) + \
+              "{f} ".format(f=input_fastq) + \
               "{r} ".format(r=ref_fasta) + \
               "{o} ".format(o=out_pickle)
         if sa_file is not None:
@@ -318,7 +327,7 @@ class IcePartialOne(object):
         """Run"""
         logging.info("Building uc from non-full-length reads using DALIGNER.")
 
-        build_uc_from_partial_daligner(input_fasta=self.input_fasta,
+        build_uc_from_partial_daligner(input_fastq=self.input_fastq,
                                        ref_fasta=self.ref_fasta,
                                        out_pickle=self.out_pickle,
                                        ccs_fofn=self.ccs_fofn,
@@ -338,7 +347,7 @@ class IcePartialOne(object):
 def add_ice_partial_one_arguments(parser):
     """Add arguments for assigning nfl reads of a given input fasta
     to unpolished isoforms."""
-    parser.add_argument("input_fasta", help="Input fasta split file")
+    parser.add_argument("input_fastq", help="Input fastq split file")
     parser.add_argument("ref_fasta",
                         help="Reference fasta file, most likely " +
                              "ref_consensus.fa from ICE output")

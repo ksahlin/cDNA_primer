@@ -14,10 +14,10 @@ from bisect import bisect_right
 from collections import defaultdict
 from pbtools.pbtranscript.__init__ import get_version
 
-def sep_flnc_by_primer(flnc_filename, root_dir, output_filename='isoseq_flnc.fasta'):
+def sep_flnc_by_primer(flnc_filename, root_dir, output_filename='isoseq_flnc.fastq'):
     """
-    Separate flnc fasta by primer. Useful for targeted sequencing.
-    ex: make <root_dir>/primer0/isoseq_flnc.fasta ... etc ...
+    Separate flnc fastq by primer. Useful for targeted sequencing.
+    ex: make <root_dir>/primer0/isoseq_flnc.fastq ... etc ...
     """
     def get_primer(r):
         for x in r.name.split(';'):
@@ -26,7 +26,7 @@ def sep_flnc_by_primer(flnc_filename, root_dir, output_filename='isoseq_flnc.fas
         return None
 
     primers = set()
-    for r in FastaReader(flnc_filename):
+    for r in FastqReader(flnc_filename):
         p = get_primer(r)
         if p is None:
             raise Exception, "ERROR: Unable to find primer information from sequence ID for {0}! Abort!".format(r.name)
@@ -39,23 +39,25 @@ def sep_flnc_by_primer(flnc_filename, root_dir, output_filename='isoseq_flnc.fas
             print >> sys.stderr, "WARNING: {0} already exists.".format(dirname)
         else:
             os.makedirs(dirname)
-        handles[p] = open(os.path.join(dirname, output_filename), 'w')
+        handles[p] = FastqWriter(os.path.join(dirname, output_filename))
+        #handles[p] = open(os.path.join(dirname, output_filename), 'w')
 
-    for r in FastaReader(flnc_filename):
+    for r in FastqReader(flnc_filename):
         p = get_primer(r)
-        handles[p].write(">{0}\n{1}\n".format(r.name, r.sequence))
+        handles[p].writeRecord(r.name, r.sequence, r.quality)
+        #handles[p].write(">{0}\n{1}\n".format(r.name, r.sequence))
 
     for f in handles.itervalues(): f.close()
     primers = list(primers)
     primers.sort(key=lambda x: int(x))
-    names = [handles[x].name for x in primers]
+    names = [handles[x].file.name for x in primers]
     return filter(lambda x: os.stat(x).st_size > 0, names)
 
 
-def sep_flnc_by_size(flnc_filename, root_dir, bin_size_kb=1, bin_manual=None, max_base_limit_MB=600, output_filename='isoseq_flnc.fasta'):
+def sep_flnc_by_size(flnc_filename, root_dir, bin_size_kb=1, bin_manual=None, max_base_limit_MB=600, output_filename='isoseq_flnc.fastq'):
     """
-    Separate flnc fasta into different size bins
-    ex: make <root_dir>/0to2k/isoseq_flnc.fasta ... etc ...
+    Separate flnc fastq into different size bins
+    ex: make <root_dir>/0to2k/isoseq_flnc.fastq ... etc ...
 
     If <bin_manual> (ex: (0, 2, 4, 12)) is given, <bin_size_kb> is ignored.
 
@@ -66,7 +68,7 @@ def sep_flnc_by_size(flnc_filename, root_dir, bin_size_kb=1, bin_manual=None, ma
     min_size = 0
     max_size = 0
     base_in_each_size = defaultdict(lambda: 0) # size(in kb)--> number of bases
-    for r in FastaReader(flnc_filename):
+    for r in FastqReader(flnc_filename):
         seqlen = len(r.sequence)
         min_size = min(min_size, seqlen)
         max_size = max(max_size, seqlen)
@@ -106,22 +108,22 @@ def sep_flnc_by_size(flnc_filename, root_dir, bin_size_kb=1, bin_manual=None, ma
                 print >> sys.stderr, "WARNING: {0} already exists.".format(dirname)
             else:
                 os.makedirs(dirname)
-            handles[(i,part)] = open(os.path.join(dirname, output_filename), 'w')
+            handles[(i,part)] = FastqWriter(os.path.join(dirname, output_filename))
 
 
-    for r in FastaReader(flnc_filename):
+    for r in FastqReader(flnc_filename):
         kb_size = len(r.sequence)/1000
         i = min(max_bin, max(0, bisect_right(bins, kb_size)-1))
         part = part_counter_in_each_bin[i] % num_parts_in_each_bin[i]
         part_counter_in_each_bin[i] += 1
-        handles[(i,part)].write(">{0}\n{1}\n".format(r.name, r.sequence))
-        print >> sys.stderr, "putting {0} in {1}".format(len(r.sequence), handles[(i,part)].name)
+        handles[(i,part)].writeRecord(r.name, r.sequence, r.quality)
+        print >> sys.stderr, "putting {0} in {1}".format(len(r.sequence), handles[(i,part)].file.name)
     for h in handles.itervalues(): h.close()
 
     names = []
     for i in xrange(len(bins)-1):
         for part in xrange(num_parts_in_each_bin[i]):
-            names.append(handles[(i,part)].name)
+            names.append(handles[(i,part)].file.name)
     return filter(lambda x: os.stat(x).st_size > 0, names)
 
 def combine_quiver_results(split_dirs, output_dir, hq_filename, lq_filename, tofu_prefix=''):
@@ -158,10 +160,11 @@ def run_collapse_sam(fastq_filename, gmap_db_dir, gmap_db_name, cpus=24, min_cov
     (b) sort GMAP sam
     (c) run collapse_isoforms_by_sam
     """
-    cmd = "gmap -D {d} -d {name} -n 0 -t {cpus} -z sense_force --cross-species -f samse {fq} > {fq}.sam 2> {fq}.sam.log".format(\
-            d=gmap_db_dir, name=gmap_db_name, cpus=cpus, fq=fastq_filename)
-    print >> sys.stderr, "CMD:", cmd
-    subprocess.check_call(cmd, shell=True)
+    if not os.path.exists(fastq_filename + '.sam'):
+        cmd = "gmap -D {d} -d {name} -n 0 -t {cpus} -z sense_force --cross-species -f samse {fq} > {fq}.sam 2> {fq}.sam.log".format(\
+                d=gmap_db_dir, name=gmap_db_name, cpus=cpus, fq=fastq_filename)
+        print >> sys.stderr, "CMD:", cmd
+        subprocess.check_call(cmd, shell=True)
     cmd = "sort -k 3,3 -k 4,4n {fq}.sam > {fq}.sorted.sam".format(fq=fastq_filename)
     print >> sys.stderr, "CMD:", cmd
     subprocess.check_call(cmd, shell=True) 
@@ -206,6 +209,13 @@ def run_filtering_by_count(input_prefix, output_prefix, min_count):
     cmd = "filter_by_count.py {i} {o} --min_count {c}".format(i=input_prefix,
                                                               o=output_prefix,
                                                               c=min_count)
+    print >> sys.stderr, "CMD:", cmd
+    subprocess.check_call(cmd, shell=True)
+
+def run_filtering_away_subsets(input_prefix, output_prefix, fuzzy_junction):
+    cmd = "filter_away_subset_in_no5merge.py {i} {o} --fuzzy_junction {j}".format(i=input_prefix,
+                                                                                  o=output_prefix,
+                                                                                  j=fuzzy_junction)
     print >> sys.stderr, "CMD:", cmd
     subprocess.check_call(cmd, shell=True)
 
@@ -356,11 +366,16 @@ def tofu_wrap_main():
     with open(os.path.join(args.root_dir, 'combined', 'combined.hq_lq_pre_dict.pickle'), 'w') as f:
         dump({'HQ': hq_pre_dict, 'LQ': lq_pre_dict}, f)
     # (5) collapse quivered HQ results
-    collapse_prefix_hq = run_collapse_sam(hq_filename, args.gmap_db, args.gmap_name, cpus=args.blasr_nproc, max_fuzzy_junction=args.max_fuzzy_junction)
+    collapse_prefix_hq = run_collapse_sam(hq_filename, args.gmap_db, args.gmap_name, cpus=args.blasr_nproc, max_fuzzy_junction=args.max_fuzzy_junction, dun_merge_5_shorter=True)
     # (6) make abundance 
     get_abundance(collapse_prefix_hq, hq_pre_dict, collapse_prefix_hq)
-    # (7) run filtering
-    run_filtering_by_count(collapse_prefix_hq, collapse_prefix_hq+'.min_fl_2', min_count=2)
+    # (7) run filtering & removing subsets in no5merge
+    if args.targeted_isoseq:
+        run_filtering_by_count(collapse_prefix_hq, collapse_prefix_hq+'.min_fl_5', min_count=5)
+        run_filtering_away_subsets(collapse_prefix_hq+'.min_fl_5', collapse_prefix_hq+'.min_fl_5.filtered', args.max_fuzzy_junction)
+    else:
+        run_filtering_by_count(collapse_prefix_hq, collapse_prefix_hq+'.min_fl_2', min_count=2)
+        run_filtering_away_subsets(collapse_prefix_hq+'.min_fl_2', collapse_prefix_hq+'.min_fl_2.filtered', args.max_fuzzy_junction)
     # Now do it for LQ (turned OFF for now)
     #collapse_prefix_lq = run_collapse_sam(lq_filename, args.gmap_db, args.gmap_name, cpus=args.blasr_nproc)
     #get_abundance(collapse_prefix_lq, lq_pre_dict, collapse_prefix_lq)

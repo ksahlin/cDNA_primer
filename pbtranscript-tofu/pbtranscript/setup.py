@@ -43,6 +43,7 @@ setup(
              'pbtools/pbtranscript/fusion_finder.py',
              'pbtools/pbtranscript/tofu_wrap.py',
              'pbtools/pbtranscript/filter_by_count.py',
+             'pbtools/pbtranscript/filter_away_subset_in_no5merge.py',
              'pbtools/pbtranscript/ice_partial.py',
              'pbtools/pbtranscript/ice_pbdagcon.py',
              'pbtools/pbtranscript/ice_quiver.py',

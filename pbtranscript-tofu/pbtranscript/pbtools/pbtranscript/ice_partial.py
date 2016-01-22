@@ -170,8 +170,8 @@ class IcePartialRunner(PBMultiToolRunner):
                                      ccs_fofn=args.ccs_fofn)
 
             elif cmd == "one":
-                # Only assign nfl reads in the given input_fasta file to isoforms
-                obj = IcePartialOne(input_fasta=args.input_fasta,
+                # Only assign nfl reads in the given input_fastq file to isoforms
+                obj = IcePartialOne(input_fastq=args.input_fastq,
                                     ref_fasta=args.ref_fasta,
                                     out_pickle=args.out_pickle,
                                     sa_file=args.sa_file,

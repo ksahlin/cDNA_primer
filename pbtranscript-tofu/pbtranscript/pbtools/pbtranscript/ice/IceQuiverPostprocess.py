@@ -334,7 +334,8 @@ class IceQuiverPostprocess(IceFiles):
             if qv_len != 0:
                 q = [phred_to_qv(x) for x in r.quality]
                 err_sum = sum(q[self.qv_trim_5: -self.qv_trim_3])
-                if 1.0 - (err_sum / float(qv_len)) >= self.hq_quiver_min_accuracy:
+                # LIZ HACK: definitely of HQ must include # of FL >= 2 !!!
+                if 1.0 - (err_sum / float(qv_len)) >= self.hq_quiver_min_accuracy and len(uc[cid]) >= 2:
                     good.append(cid)
 
         partial_uc = load(open(self.nfl_all_pickle_fn))['partial_uc']

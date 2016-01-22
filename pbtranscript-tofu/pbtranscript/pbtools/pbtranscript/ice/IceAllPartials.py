@@ -21,6 +21,7 @@ from pbtools.pbtranscript.PBTranscriptOptions import \
 from pbtools.pbtranscript.Utils import realpath, mkdir, real_upath, ln
 from pbtools.pbtranscript.ice.IceFiles import IceFiles
 from pbtools.pbtranscript.ice.IceUtils import combine_nfl_pickles
+from pbtools.pbtranscript.ice.IceUtils import ice_fq2fa
 
 
 class IceAllPartials(IceFiles):
@@ -36,10 +37,10 @@ class IceAllPartials(IceFiles):
 
     prog = "ice_partial.py all " # used by ice_partial.py
 
-    def __init__(self, root_dir, fasta_filenames, ref_fasta,
+    def __init__(self, root_dir, fastq_filenames, ref_fasta,
                  out_pickle, sge_opts, sa_file=None, ccs_fofn=None):
         """
-        fasta_filenames --- a list of splitted nfl fasta files.
+        fastq_filenames --- a list of splitted nfl fastq files.
 
         ref_fasta --- (unpolished) consensus isoforms
 
@@ -61,8 +62,8 @@ class IceAllPartials(IceFiles):
 
         self.add_log("DEBUG: in IceAllPartials, ccs_fofn is {0}.".format(ccs_fofn), level=logging.INFO)
 
-        self.fasta_filenames, self.ref_fasta, self.ccs_fofn, self.sa_file = \
-            self._validate_inputs(fasta_filenames=fasta_filenames,
+        self.fastq_filenames, self.ref_fasta, self.ccs_fofn, self.sa_file = \
+            self._validate_inputs(fastq_filenames=fastq_filenames,
                                   ref_fasta=ref_fasta,
                                   ccs_fofn=ccs_fofn,
                                   sa_file=sa_file)
@@ -75,16 +76,16 @@ class IceAllPartials(IceFiles):
         mkdir(self.nfl_dir)
 
         self.add_log("input fasta files are: " +
-                     ", ".join(self.fasta_filenames))
+                     ", ".join(self.fastq_filenames))
         self.add_log("temp pickle files are: " +
                      ", ".join(self.pickle_filenames))
         self.add_log("out pickle file is: " + self.out_pickle)
 
-    def _validate_inputs(self, fasta_filenames, ref_fasta, ccs_fofn, sa_file):
+    def _validate_inputs(self, fastq_filenames, ref_fasta, ccs_fofn, sa_file):
         """Validate input files."""
-        for f in fasta_filenames:
+        for f in fastq_filenames:
             if not op.exists(f):
-                raise IOError("Input fasta {f} does not exist.".format(f=f))
+                raise IOError("Input fastq {f} does not exist.".format(f=f))
         if ref_fasta is None or not op.exists(ref_fasta):
             raise IOError("Reference {r} does not exist.".format(r=ref_fasta))
         if ccs_fofn is not None and not op.exists(ccs_fofn):
@@ -92,14 +93,14 @@ class IceAllPartials(IceFiles):
                 ccs_fofn=ccs_fofn))
         if sa_file is not None and not op.exists(sa_file):
             raise IOError("suffix array {s} does not exist.".format(s=sa_file))
-        return ([realpath(f) for f in fasta_filenames],
+        return ([realpath(f) for f in fastq_filenames],
                 realpath(ref_fasta),
                 realpath(ccs_fofn),
                 realpath(sa_file) if sa_file is not None else None)
 
     def cmd_str(self):
         """Return a cmd string."""
-        return self._cmd_str(fasta_filenames=self.fasta_filenames,
+        return self._cmd_str(fastq_filenames=self.fastq_filenames,
                              ref_fasta=self.ref_fasta,
                              out_pickle=self.out_pickle,
                              root_dir=self.root_dir,
@@ -107,11 +108,11 @@ class IceAllPartials(IceFiles):
                              sa_file=self.sa_file,
                              sge_opts=self.sge_opts)
 
-    def _cmd_str(self, fasta_filenames, ref_fasta, out_pickle,
+    def _cmd_str(self, fastq_filenames, ref_fasta, out_pickle,
                  root_dir, ccs_fofn, sa_file, sge_opts):
         """Return a cmd string."""
         cmd = self.prog + \
-              "{fns} ".format(fns=",".join(fasta_filenames)) + \
+              "{fns} ".format(fns=",".join(fastq_filenames)) + \
               "{ref} ".format(ref=ref_fasta) + \
               "{out} ".format(out=out_pickle)
         if root_dir is not None:
@@ -128,7 +129,7 @@ class IceAllPartials(IceFiles):
     def pickle_filenames(self):
         """pickle files for each fasta file."""
         return [op.join(self.nfl_dir, op.basename(f) + ".partial_uc.pickle")
-                for f in self.fasta_filenames]
+                for f in self.fastq_filenames]
 
     @property
     def done_filenames(self):
@@ -140,10 +141,10 @@ class IceAllPartials(IceFiles):
     def script_filenames(self):
         """scripts to generate pickles from fasta files."""
         return [op.join(self.script_dir, op.basename(f) + ".partial_uc.sh")
-                for f in self.fasta_filenames]
+                for f in self.fastq_filenames]
 
     def createPickles(self):
-        """For each file in fasta_filenames, call 'ice_partial.py one' to
+        """For each file in fastq_filenames, call 'ice_partial.py one' to
         build clusters and to save results to a pickle file. When all pickles
         are done, union all pickles.
         """
@@ -151,10 +152,10 @@ class IceAllPartials(IceFiles):
         self.add_log("Creating pickles...", level=logging.INFO)
 
         # using --blasr_nproc=4 because DALIGNER uses only 4 cores
-        for idx, fa in enumerate(self.fasta_filenames):
+        for idx, fq in enumerate(self.fastq_filenames):
             # for each splitted non-full-length reads fasta file, build #
             # partial_uc.pickle
-            cmd = "ice_partial.py one {i} ".format(i=real_upath(fa)) + \
+            cmd = "ice_partial.py one {i} ".format(i=real_upath(fq)) + \
                   "{r} ".format(r=real_upath(self.ref_fasta)) + \
                   "{o} ".format(o=real_upath(self.pickle_filenames[idx])) + \
                   "--blasr_nproc={n} ".format(n=4) + \
@@ -177,7 +178,7 @@ class IceAllPartials(IceFiles):
             olog = partial_log_fn + ".olog"
             jid = "ice_partial_{unique_id}_{name}".format(
                 unique_id=self.sge_opts.unique_id,
-                name=op.basename(fa))
+                name=op.basename(fq))
 
             qsub_cmd = "qsub"
             if self.sge_opts.sge_queue is not None:
@@ -189,7 +190,7 @@ class IceAllPartials(IceFiles):
                        "-N {jid} ".format(jid=jid) + \
                        "{sh}".format(sh=real_upath(self.script_filenames[idx]))
 
-            self.add_log("Creating a pickle for {f}".format(f=fa))
+            self.add_log("Creating a pickle for {f}".format(f=fq))
 
             if self.sge_opts.use_sge is True:
                 self.qsub_cmd_and_log(qsub_cmd)
@@ -237,7 +238,7 @@ class IceAllPartials(IceFiles):
 
 def add_ice_all_partials_arguments(parser):
     """Add IceAllPartials argument parser."""
-    parser.add_argument("fasta_filenames",
+    parser.add_argument("fastq_filenames",
                         type=str,
                         help="comma delimited fasta files of " +
                              "splitted non-full-length reads")

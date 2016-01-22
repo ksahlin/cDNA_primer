@@ -3,6 +3,7 @@ Define miscBio.FastaRandomReader.
 It will be repaced by pbcore.io.FastaIO.FastaRandomReader.
 """
 from pbcore.io.FastaIO import FastaRecord
+from pbcore.io.FastqIO import FastqRecord
 from collections import namedtuple
 
 
@@ -49,8 +50,63 @@ class FastaRandomReader:
             if line.startswith('>'):
                 break
             content += line.strip()
-        # return SeqRecord(Seq(content), id=k)
-        return FastaRecord(k, sequence=content)
+
+        return FastaRecord(name=k, sequence=content)
+
+    def __len__(self):
+        return len(self.d)
+
+    def __delitem__(self, key):
+        errMsg = "FastqRandomReader.__delitem__ not defined."
+        raise NotImplementedError(errMsg)
+
+    def __setitem__(self, key):
+        errMsg = "FastqRandomReader.__setitem__ not defined."
+        raise NotImplementedError(errMsg)
+
+    def keys(self):
+        """Return d.keys."""
+        return self.d.keys()
+
+class FastqRandomReader:
+
+    """
+        This is meant to substitute for the Bio.SeqIO.to_dict method since some fasta files
+        are too big to fit entirely to memory. The only requirement is that every id line
+        begins with the symbol >. It is ok for the sequences to stretch multiple lines.
+        The sequences, when read, are returned as Bio.SeqRecord objects.
+
+        Example:
+            r = FastqRandomReader('output/test.fq')
+            r['6C_49273_NC_008578/2259031-2259297'] ==> this shows a FastqRecord
+    """
+
+    def __init__(self, fastq_filename):
+        self.f = open(fastq_filename)
+        self.d = {}
+        self.locations = []
+        self.locations_d_key_map = {}
+
+        while 1:
+            line = self.f.readline()
+            if len(line) == 0:
+                break
+            if line.startswith('@'):
+                sid = line.strip()[1:].split(None, 1)[0]
+                # the header MUST be just 1 line
+                # if id in self.d:
+                #    print "duplicate id {0}!!".format(id)
+                self.d[sid] = self.f.tell()
+
+    def __getitem__(self, k):
+        if k not in self.d:
+            errMsg = "key {k} not in {f}!".format(k=k, f=self.f.name)
+            raise ValueError(errMsg)
+        self.f.seek(self.d[k])
+        content = self.f.readline().strip() # in fastq, sequence must be the next line
+        assert self.f.readline().startswith('+')
+        quality = self.f.readline().strip()
+        return FastqRecord(name=k, sequence=content, qualityString=quality)
 
     def __len__(self):
         return len(self.d)
@@ -66,6 +122,7 @@ class FastaRandomReader:
     def keys(self):
         """Return d.keys."""
         return self.d.keys()
+
 
 
 class MetaSubreadFastaReader(object):

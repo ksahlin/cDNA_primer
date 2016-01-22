@@ -58,7 +58,7 @@ class IceInit(object):
 
     def _align(self, queryFa, output_dir, ice_opts, sge_opts):
 
-        daligner_sensitive_mode, _low, _high = get_daligner_sensitivity_setting(queryFa)
+        daligner_sensitive_mode, _low, _high, _ignore5, _ignore3, _ece_min_len = get_daligner_sensitivity_setting(queryFa, is_fasta=True)
 
         input_obj = DazzIDHandler(queryFa, False)
         DalignerRunner.make_db(input_obj.dazz_filename)
@@ -68,11 +68,11 @@ class IceInit(object):
                             query_converted=True, db_converted=True, query_made=True, \
                             db_made=True, use_sge=False, cpus=4, sge_opts=None)
         las_filenames, las_out_filenames = runner.runHPC(min_match_len=_low, output_dir=output_dir, sensitive_mode=daligner_sensitive_mode)
-        return input_obj, las_out_filenames
+        return input_obj, las_out_filenames, _ignore5, _ignore3, _ece_min_len
 
 
     # version using BLASR
-    def _makeGraphFromM5(self, m5FN, qver_get_func, qvmean_get_func, ice_opts):
+    def _makeGraphFromM5(self, m5FN, qver_get_func, qvmean_get_func, ice_opts, max_missed_start, max_missed_end):
         """Construct a graph from a BLASR M5 file."""
         alignGraph = nx.Graph()
 
@@ -82,7 +82,9 @@ class IceInit(object):
             qver_get_func=qver_get_func,
             qvmean_get_func=qvmean_get_func,
             ece_penalty=ice_opts.ece_penalty,
-            ece_min_len=ice_opts.ece_min_len):
+            ece_min_len=ice_opts.ece_min_len,
+            max_missed_start=max_missed_start,
+            max_missed_end=max_missed_end):
             if r.qID == r.cID:
                 continue # self hit, ignore
             if r.ece_arr is not None:
@@ -90,7 +92,7 @@ class IceInit(object):
                 alignGraph.add_edge(r.qID, r.cID)
         return alignGraph
 
-    def _makeGraphFromLasOut(self, las_out_filenames, dazz_obj, qver_get_func, ice_opts, qvmean_get_func=None):
+    def _makeGraphFromLasOut(self, las_out_filenames, dazz_obj, qver_get_func, ice_opts, max_missed_start, max_missed_end, qvmean_get_func=None):
         alignGraph = nx.Graph()
 
         for las_out_filename in las_out_filenames:
@@ -100,7 +102,8 @@ class IceInit(object):
                       qver_get_func=qver_get_func, qvmean_get_func=qvmean_get_func,
                       qv_prob_threshold=.03,
                       ece_penalty=ice_opts.ece_penalty, ece_min_len=ice_opts.ece_min_len,
-                      same_strand_only=True, no_qv_or_aln_checking=False):
+                      same_strand_only=True, no_qv_or_aln_checking=False,
+                      max_missed_start=max_missed_start, max_missed_end=max_missed_end):
                 if r.qID == r.cID: continue # self hit, ignore
                 if r.ece_arr is not None:
                     alignGraph.add_edge(r.qID, r.cID)
@@ -185,13 +188,19 @@ class IceInit(object):
         output_dir = os.path.dirname(readsFa)
 
         try:
-            dazz_obj, las_out_filenames = self._align(queryFa=readsFa, output_dir=output_dir,
+            dazz_obj, las_out_filenames, _ignore5, _ignore3, _ece_min_len = self._align(queryFa=readsFa, output_dir=output_dir,
                 ice_opts=ice_opts, sge_opts=sge_opts)
-            alignGraph = self._makeGraphFromLasOut(las_out_filenames, dazz_obj, qver_get_func, ice_opts, qvmean_get_func=qvmean_get_func)
+            ice_opts.ece_min_len = _ece_min_len # overwrite
+            alignGraph = self._makeGraphFromLasOut(las_out_filenames, dazz_obj, qver_get_func, ice_opts, \
+                                                   max_missed_start=_ignore5, max_missed_end=_ignore3, \
+                                                   qvmean_get_func=qvmean_get_func)
         except: # daligner probably crashed, fall back to blasr
             outFN = readsFa + '.self.blasr'
+            daligner_sensitive_mode, _low, _high, _ignore5, _ignore3, _ece_min_len = get_daligner_sensitivity_setting(readsFa, is_fasta=True)
+            ice_opts.ece_min_len = _ece_min_len # overwrite
             self._align_withBLASR(queryFa=readsFa, targetFa=readsFa, outFN=outFN, ice_opts=ice_opts, sge_opts=sge_opts)
-            alignGraph = self._makeGraphFromM5(outFN, qver_get_func, qvmean_get_func, ice_opts)
+            alignGraph = self._makeGraphFromM5(outFN, qver_get_func, qvmean_get_func, ice_opts, \
+                                               max_missed_start=_ignore5, max_missed_end=_ignore3)
 
         uc = self._findCliques(alignGraph=alignGraph, readsFa=readsFa)
         return uc
