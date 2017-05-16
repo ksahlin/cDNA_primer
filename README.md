@@ -2,6 +2,10 @@
 
 Last Updated: 10/15/2015
 
+
+IMPORTANT: This GitHub repo/wiki will no longer be updated. All contents will remain frozen. All new Iso-Seq information, including SMRTLink 4.0 and above, tutorials, etc, will be now maintained at the new [Iso-Seq "IsoSeq_SA3nUp" repository](https://github.com/PacificBiosciences/IsoSeq_SA3nUP/wiki). Many of the links are now actually pointing to the new repo.
+
+
 **IMPORTANT NOTICE: The current version (2.2.3) of ToFU will NOT BE UPDATED. The next round of ToFu will be expected to be released after November 2015, after changes conforming to [PacBio's new BAM format standard](https://www.genomeweb.com/informatics/pacbio-unveils-plans-use-bam-format-sequence-data-user-community-weighs) have been completed. All bugs and issues in ToFU 2.2.3 can be reported but will not be fixed until after the format changes.**
 
 
