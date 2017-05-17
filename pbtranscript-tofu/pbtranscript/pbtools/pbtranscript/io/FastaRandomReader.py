@@ -3,7 +3,6 @@ Define miscBio.FastaRandomReader.
 It will be repaced by pbcore.io.FastaIO.FastaRandomReader.
 """
 from pbcore.io.FastaIO import FastaRecord
-from pbcore.io.FastqIO import FastqRecord
 from collections import namedtuple
 
 
@@ -50,6 +49,7 @@ class FastaRandomReader:
             if line.startswith('>'):
                 break
             content += line.strip()
+<<<<<<< HEAD
 
         return FastaRecord(name=k, sequence=content)
 
@@ -107,6 +107,10 @@ class FastqRandomReader:
         assert self.f.readline().startswith('+')
         quality = self.f.readline().strip()
         return FastqRecord(name=k, sequence=content, qualityString=quality)
+=======
+        # return SeqRecord(Seq(content), id=k)
+        return FastaRecord(name=k, sequence=content)
+>>>>>>> parent of c298ad5... Three small fixes to ICE pipeline. One fix is specifically to make ICE run when qualityvalues are not provided
 
     def __len__(self):
         return len(self.d)
@@ -205,7 +209,7 @@ class SubreadFastaReader(object):
                 if line.startswith('>'):
                     break
                 content += line.strip()
-            output.append(FastaRecord(seqid, sequence=content))
+            output.append(FastaRecord(name=seqid, sequence=content))
         return output
 
     def keys(self):
